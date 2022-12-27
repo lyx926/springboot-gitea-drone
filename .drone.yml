@@ -1,0 +1,43 @@
+kind: pipeline # 定义一个管道
+type: docker # 定义管道类型
+name: springboot # 定义管道名称
+
+steps:
+  - name: build-jar # 流水线名称
+    image: maven:3.8.5-openjdk-8 # 定义创建容器的Docker镜像
+    volumes: # 将容器内目录挂载到宿主机，仓库需要开启Trusted设置
+      - name: maven-cache # 数据卷名称
+        path: /root/.m2 # 将maven下载依赖的目录挂载出来，防止重复下载
+      - name: maven-build # 数据卷名称
+        path: /app/build # 将应用打包好的Jar和执行脚本挂载出来
+    commands: # 定义在Docker容器中执行的shell命令
+      - mvn clean package -DskipTests=true # 应用打包命
+      - cp target/*.jar /app/build/ROOT.jar # 复制jar
+      - cp Dockerfile /app/build/ # 复制Dockerfile
+      - cp run.sh /app/build/ # 复制run.sh脚本
+
+  - name: build-docker # 步骤名称
+    image: plugins/docker # 使用镜像和版本
+    volumes: # 将容器内目录挂载到宿主机，仓库需要开启Trusted设置
+      - name: maven-build # 数据卷名称
+        path: /app/build # 将应用打包好的Jar和执行脚本挂载出来
+      - name: docker # 数据卷名称
+        path: /var/run/docker.sock # 挂载宿主机的docker
+    settings:
+      dockerfile: /app/build/Dockerfile
+    commands: # 定义在Docker容器中执行的shell命令
+      - cd /app/build # 切换目录
+      - chmod +x run.sh # 脚本执行权限
+      - sh run.sh # 执行脚本
+      - docker ps # 容器日志
+
+volumes: # 定义流水线挂载目录，用于共享数据 声明宿主机 映射到 drone执行器的数据卷
+  - name: maven-build # 数据卷名称
+    host:
+      path: /home/data/maven/build # 从宿主机中挂载的目录
+  - name: maven-cache # 数据卷名称
+    host:
+      path: /home/data/maven/cache # 从宿主机中挂载的目录
+  - name: docker # 数据卷名称
+    host:
+      path: /var/run/docker.sock # 挂载宿主机的docker
